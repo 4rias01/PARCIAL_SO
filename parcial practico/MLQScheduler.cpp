@@ -7,9 +7,6 @@
 #include <iomanip>
 
 MLQScheduler::MLQScheduler(int currentTime) {
-    this->rr = nullptr; 
-    this->rr2 = nullptr;
-    this->fifoScheduler = nullptr;
     this->currentTime = currentTime;
 }
 
@@ -97,6 +94,7 @@ void MLQScheduler::run() {
 
             // Durante la ejecución han podido llegar procesos; se agregarán al inicio del siguiente ciclo
 
+            
             if (p->getRemainingTime() == 0) {
                 p->setCompletionTime(currentTime);
                 int wt = p->getCompletionTime() - p->getArrivalTime() - p->getBurstTime();
@@ -162,18 +160,6 @@ void MLQScheduler::run() {
 }
 
 void MLQScheduler::deleteInstances() {
-    if (rr) {
-        delete rr;
-        rr = nullptr;
-    }
-    if (rr2) {
-        delete rr2;
-        rr2 = nullptr;
-    }
-    if (fifoScheduler) {
-        delete fifoScheduler;
-        fifoScheduler = nullptr;
-    }
     for (auto process : processes) {
         delete process;
     }

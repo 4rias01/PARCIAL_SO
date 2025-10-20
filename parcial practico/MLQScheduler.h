@@ -16,17 +16,12 @@ class MLQScheduler
     public:
         MLQScheduler(int currentTime);
         void readFile(string filename);
-        void initializeQueues();
         void run();
         void deleteInstances();
-    void printReport();
-    const vector<Process*>& getProcesses() const { return processes; }
+        void printReport();
+        const vector<Process*>& getProcesses() const { return processes; }
 
     private:
-        RoundRobinScheduler* rr;
-        RoundRobinScheduler* rr2;
-        FIFOScheduler* fifoScheduler;
-
         deque<Process*> queue1; // Cola para el nivel 1
         deque<Process*> queue2; // Cola para el nivel 2
         deque<Process*> queue3; // Cola para el nivel 3

@@ -29,7 +29,6 @@ int main(int argc, char* argv[]) {
 
 	// Dejar que MLQScheduler imprima el informe final
 	mlq.printReport();
-
 	mlq.deleteInstances();
 	return 0;
 }

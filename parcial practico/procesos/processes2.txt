@@ -1,0 +1,10 @@
+# Archivo: processes2.txt
+# Archivo de ejemplo 2
+# 09102024
+# etiqueta; burst time (BT); arrival time (AT); Queue (Q); Priority (5 > 1)
+
+P1;6;0;1;4
+P2;1;0;1;5
+P3;4;0;3;1
+P4;3;0;3;4
+P5;2;0;2;5

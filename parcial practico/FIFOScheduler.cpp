@@ -48,7 +48,7 @@ void FIFOScheduler::run() {
         Process* p = readyQueue.front();
         readyQueue.pop_front();
 
-        // Si por alguna razón aún no ha llegado (defensivo), avanzar
+        // Si por alguna razón aún no ha llegado, avanzar
         if (p->getArrivalTime() > currentTime) currentTime = p->getArrivalTime();
 
         // Registrar response time si es la primera ejecución
