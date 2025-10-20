@@ -66,8 +66,6 @@ void FIFOScheduler::run() {
         int wt = p->getCompletionTime() - p->getArrivalTime() - p->getBurstTime();
         p->setWaitingTime(wt);
 
-        cout << "Proceso " << p->getName() << " ejecutado completamente. Tiempo actual: " << currentTime << endl;
-
         // Durante la ejecución han podido llegar más procesos: añadirlos al readyQueue
         while (!incomingProcesses.empty() && incomingProcesses.front()->getArrivalTime() <= currentTime) {
             readyQueue.push_back(incomingProcesses.front());

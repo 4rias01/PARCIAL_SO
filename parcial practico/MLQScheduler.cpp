@@ -85,43 +85,121 @@ void MLQScheduler::run() {
 
         // Prioridad: cola1 > cola2 > cola3
         if (!queue1.empty()) {
-            Process* p = queue1.front(); queue1.pop_front();
-            if (p->getRemainingTime() == p->getBurstTime() && p->getResponseTime() == -1) p->setResponseTime(currentTime);
-            int exec = min(q1_quantum, p->getRemainingTime());
-            p->setRemainingTime(p->getRemainingTime() - exec);
-            currentTime += exec;
-            cout << "[Q1] Ejecutado " << p->getName() << " por " << exec << " -> t=" << currentTime << endl;
+            // Usar proceso-lista estable para RR en Q1: tomar snapshot de la cola y procesar
+            vector<Process*> procList;
+            while (!queue1.empty()) { procList.push_back(queue1.front()); queue1.pop_front(); }
 
-            // Durante la ejecución han podido llegar procesos; se agregarán al inicio del siguiente ciclo
+            size_t idx = 0;
+            while (idx < procList.size()) {
+                Process* p = procList[idx];
+                if (p->getRemainingTime() == 0) { idx++; continue; }
+                if (p->getRemainingTime() == p->getBurstTime() && p->getResponseTime() == -1) p->setResponseTime(currentTime);
 
-            
-            if (p->getRemainingTime() == 0) {
-                p->setCompletionTime(currentTime);
-                int wt = p->getCompletionTime() - p->getArrivalTime() - p->getBurstTime();
-                p->setWaitingTime(wt);
-                cout << "[Q1] Completado " << p->getName() << " CT=" << p->getCompletionTime() << " WT=" << wt << " RT=" << p->getResponseTime() << endl;
-            } else {
-                queue1.push_back(p); // reencolar al final de Q1
+                int exec = min(q1_quantum, p->getRemainingTime());
+                p->setRemainingTime(p->getRemainingTime() - exec);
+                currentTime += exec;
+                cout << "[Q1] Ejecutado " << p->getName() << " por " << exec << " -> t=" << currentTime << endl;
+
+                // Después de ejecutar, reencolar el proceso incompleto al final de la lista
+                if (p->getRemainingTime() > 0) {
+                    procList.push_back(p);
+                } else {
+                    p->setCompletionTime(currentTime);
+                    int wt = p->getCompletionTime() - p->getArrivalTime() - p->getBurstTime();
+                    p->setWaitingTime(wt);
+                    cout << "[Q1] Completado " << p->getName() << " CT=" << p->getCompletionTime() << " WT=" << wt << " RT=" << p->getResponseTime() << endl;
+                }
+
+                // Procesar llegadas que ocurrieron durante la ejecución y añadirlas
+                while (!globalIncoming.empty() && globalIncoming.front()->getArrivalTime() <= currentTime) {
+                    Process* np = globalIncoming.front(); globalIncoming.pop_front();
+                    if (np->getQueueLevel() == 1) {
+                        procList.push_back(np); // nuevas llegadas de Q1 van al final de la lista
+                    } else if (np->getQueueLevel() == 2) {
+                        queue2.push_back(np);
+                    } else {
+                        queue3.push_back(np);
+                    }
+                    cout << "Llegada: " << np->getName() << " AT=" << np->getArrivalTime() << " Q=" << np->getQueueLevel() << endl;
+                }
+
+                idx++;
             }
+
+            // Cualquier proceso restante en procList (no completados) devolverlos a queue1 en orden
+            for (auto &rp : procList) if (rp->getRemainingTime() > 0) queue1.push_back(rp);
             continue;
         }
 
         if (!queue2.empty()) {
-            Process* p = queue2.front(); queue2.pop_front();
-            if (p->getRemainingTime() == p->getBurstTime() && p->getResponseTime() == -1) p->setResponseTime(currentTime);
-            int exec = min(q2_quantum, p->getRemainingTime());
-            p->setRemainingTime(p->getRemainingTime() - exec);
-            currentTime += exec;
-            cout << "[Q2] Ejecutado " << p->getName() << " por " << exec << " -> t=" << currentTime << endl;
+            // Similar al manejo de Q1 pero teniendo en cuenta preempción por llegadas a Q1
+            vector<Process*> procList;
+            while (!queue2.empty()) { procList.push_back(queue2.front()); queue2.pop_front(); }
 
-            if (p->getRemainingTime() == 0) {
-                p->setCompletionTime(currentTime);
-                int wt = p->getCompletionTime() - p->getArrivalTime() - p->getBurstTime();
-                p->setWaitingTime(wt);
-                cout << "[Q2] Completado " << p->getName() << " CT=" << p->getCompletionTime() << " WT=" << wt << " RT=" << p->getResponseTime() << endl;
-            } else {
-                queue2.push_back(p); // reencolar al final de Q2
+            size_t idx = 0;
+            while (idx < procList.size()) {
+                Process* p = procList[idx];
+                if (p->getRemainingTime() == 0) { idx++; continue; }
+                if (p->getRemainingTime() == p->getBurstTime() && p->getResponseTime() == -1) p->setResponseTime(currentTime);
+
+                int plannedExec = min(q2_quantum, p->getRemainingTime());
+                int exec = plannedExec;
+
+                // Si hay una llegada de Q1 dentro de la ventana, ajustar exec
+                if (!globalIncoming.empty()) {
+                    int windowEnd = currentTime + plannedExec;
+                    for (auto it = globalIncoming.begin(); it != globalIncoming.end(); ++it) {
+                        int at = (*it)->getArrivalTime();
+                        if (at <= currentTime) continue;
+                        if (at >= windowEnd) break;
+                        if ((*it)->getQueueLevel() == 1) { exec = at - currentTime; break; }
+                    }
+                }
+
+                if (exec > 0) {
+                    p->setRemainingTime(p->getRemainingTime() - exec);
+                    currentTime += exec;
+                    cout << "[Q2] Ejecutado " << p->getName() << " por " << exec << " -> t=" << currentTime << endl;
+                } else {
+                    // Llegada inmediata de Q1: no ejecutar este proceso ahora
+                    // Devolver el proceso al frente de la lista y salir para procesar Q1
+                    // (colocar de nuevo en procList en la misma posición y romper)
+                    // No incrementamos idx
+                    break;
+                }
+
+                // Después de ejecutar, reencolar incompletos al final de la lista
+                if (p->getRemainingTime() > 0) procList.push_back(p);
+                else {
+                    p->setCompletionTime(currentTime);
+                    int wt = p->getCompletionTime() - p->getArrivalTime() - p->getBurstTime();
+                    p->setWaitingTime(wt);
+                    cout << "[Q2] Completado " << p->getName() << " CT=" << p->getCompletionTime() << " WT=" << wt << " RT=" << p->getResponseTime() << endl;
+                }
+
+                // Procesar llegadas que ocurrieron durante la ejecución y añadirlas
+                while (!globalIncoming.empty() && globalIncoming.front()->getArrivalTime() <= currentTime) {
+                    Process* np = globalIncoming.front(); globalIncoming.pop_front();
+                    if (np->getQueueLevel() == 1) {
+                        queue1.push_back(np);
+                    } else if (np->getQueueLevel() == 2) {
+                        procList.push_back(np);
+                    } else {
+                        queue3.push_back(np);
+                    }
+                    cout << "Llegada: " << np->getName() << " AT=" << np->getArrivalTime() << " Q=" << np->getQueueLevel() << endl;
+                }
+
+                idx++;
+                // Si durante la ejecución apareció una llegada de Q1 que hemos añadido a queue1,
+                // preferimos salir y procesar Q1 antes de seguir con Q2
+                if (!queue1.empty()) break;
             }
+
+            // Devolver los procesos no completados en orden a queue2
+            for (auto &rp : procList) if (rp->getRemainingTime() > 0) queue2.push_back(rp);
+
+            // Si aparecieron procesos en Q1, dejaremos que el bucle principal los procese ahora
             continue;
         }
 
@@ -130,20 +208,33 @@ void MLQScheduler::run() {
             Process* p = queue3.front(); queue3.pop_front();
             if (p->getRemainingTime() == p->getBurstTime() && p->getResponseTime() == -1) p->setResponseTime(currentTime);
 
-            int nextArrival = INT_MAX;
-            if (!globalIncoming.empty()) nextArrival = globalIncoming.front()->getArrivalTime();
-            int availableTime = (nextArrival == INT_MAX) ? p->getRemainingTime() : max(0, nextArrival - currentTime);
-            int exec = min(p->getRemainingTime(), availableTime);
+            int plannedExec = p->getRemainingTime();
+            int exec = plannedExec;
 
-            if (exec == 0) {
-                // Hay una llegada inmediata que puede preemptar; reencolar al frente y procesar las llegadas
+            // Buscar la primera llegada dentro de la ventana que pertenezca a Q1 o Q2 (mayor prioridad)
+            if (!globalIncoming.empty()) {
+                int windowEnd = currentTime + plannedExec;
+                for (auto it = globalIncoming.begin(); it != globalIncoming.end(); ++it) {
+                    int at = (*it)->getArrivalTime();
+                    if (at <= currentTime) continue;
+                    if (at >= windowEnd) break;
+                    int qlvl = (*it)->getQueueLevel();
+                    if (qlvl == 1 || qlvl == 2) {
+                        exec = at - currentTime;
+                        break;
+                    }
+                }
+            }
+
+            if (exec > 0) {
+                p->setRemainingTime(p->getRemainingTime() - exec);
+                currentTime += exec;
+                cout << "[Q3] Ejecutado " << p->getName() << " por " << exec << " -> t=" << currentTime << endl;
+            } else {
+                // Hay una llegada inmediata de mayor prioridad; reencolar al frente y procesar llegadas
                 queue3.push_front(p);
                 continue;
             }
-
-            p->setRemainingTime(p->getRemainingTime() - exec);
-            currentTime += exec;
-            cout << "[Q3] Ejecutado " << p->getName() << " por " << exec << " -> t=" << currentTime << endl;
 
             if (p->getRemainingTime() == 0) {
                 p->setCompletionTime(currentTime);

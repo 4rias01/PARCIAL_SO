@@ -76,8 +76,6 @@ void RoundRobinScheduler::run() {
         p->setRemainingTime(p->getRemainingTime() - execTime);
         currentTime += execTime;
 
-        cout << "Proceso " << p->getName() << " ejecutado por " << execTime << " unidades de tiempo. Tiempo actual: " << currentTime << endl;
-
         // Añadir nuevos arribos que ocurrieron mientras se ejecutaba p
         while (!incomingProcesses.empty() && incomingProcesses.front()->getArrivalTime() <= currentTime) {
             processList.push_back(incomingProcesses.front());
@@ -88,7 +86,6 @@ void RoundRobinScheduler::run() {
             p->setCompletionTime(currentTime);
             int wt = p->getCompletionTime() - p->getArrivalTime() - p->getBurstTime();
             p->setWaitingTime(wt);
-            cout << "Proceso " << p->getName() << " completado en tiempo: " << currentTime << " (WT=" << wt << ", RT=" << p->getResponseTime() << ")" << endl;
             completedCount++;
         }
 

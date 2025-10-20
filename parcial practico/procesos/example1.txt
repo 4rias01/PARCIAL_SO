@@ -1,0 +1,10 @@
+# Archivo: example1.txt
+# Archivo de ejemplo 1
+# 09102024
+# etiqueta; burst time (BT); arrival time (AT); Queue (Q); Priority (5 > 1)
+
+A;4;0;3;3
+B;3;1;1;1
+C;2;3;2;1
+D;1;4;2;4
+E;3;5;1;5
